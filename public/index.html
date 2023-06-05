@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Socket.IO chat</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="group-section">
+        <h2>Chat room</h2>
+        <ul id="chat-rooms" class="chat-list"></ul>
+      </div>
+      <div class="chat-section">
+        <h1 id="yourname"></h1>
+        <ul id="messages"></ul>
+        <form id="form" action="">
+          <input id="input" autocomplete="off" /><button>Send</button>
+        </form>
+      </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io();
+      const messages = document.getElementById("messages");
+      const form = document.getElementById("form");
+      const input = document.getElementById("input");
+      const name = document.getElementById("yourname");
+      let username = "";
+      const chatRooms = document.getElementById("chat-rooms");
+      let currentRoom = "general";
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (input.value) {
+          socket.emit("chat", currentRoom, input.value);
+          input.value = "";
+        }
+      });
+
+      // #region socket event
+      // When user join, server will initialize general chat, welcome message and notify other users
+      socket.on("welcome", (yourname) => {
+        name.textContent = `You are ${yourname}`;
+        username = yourname;
+      });
+      socket.on("join", (username) => {
+        alert(`${username} join`);
+      });
+      socket.on("init", (chat) => {
+        messages.innerHTML = "";
+        chat.forEach((msg) => {
+          const item = document.createElement("li");
+          msg.from = msg.from == username ? "You" : msg.from;
+          item.textContent = `${msg.from}: ${msg.message}`;
+          messages.appendChild(item);
+        });
+      });
+
+      // When user send a message
+      socket.on("msg", (from, to, msg) => {
+        if (
+          (to == "general" && currentRoom == "general") ||
+          (to == username && currentRoom == from) ||
+          (from == username && currentRoom == to)
+        ) {
+          const item = document.createElement("li");
+          from = from == username ? "You" : from;
+          item.textContent = `${from}: ${msg}`;
+          messages.appendChild(item);
+          window.scrollTo(0, document.body.scrollHeight);
+        }
+      });
+
+      // when user leave, server will notify other users and remove user from list
+      socket.on("leave", (name, reason) => {
+        alert(`${name} leave because of ${reason}`);
+      });
+
+      socket.on("updateUsers", (users) => {
+        chatRooms.innerHTML = "";
+        users.forEach((user) => {
+          const newRoom = document.createElement("li");
+          newRoom.textContent = user;
+          newRoom.addEventListener("click", selectRoom);
+          chatRooms.appendChild(newRoom);
+        });
+        // select first room
+        chatRooms.firstChild.classList.add("selected");
+      });
+      // #endregion
+      // #region javascript function
+      function selectRoom(event) {
+        roomsArray = document.querySelectorAll("#chat-rooms li");
+        roomsArray.forEach((room) => {
+          room.classList.remove("selected");
+        });
+        const room = event.target;
+        room.classList.add("selected");
+        currentRoom = room.textContent;
+
+        socket.emit("changeRoom", room.textContent, username);
+      }
+      // #endregion
+    </script>
+  </body>
+</html>
